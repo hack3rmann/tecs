@@ -57,59 +57,61 @@ impl World {
     }
 
     pub fn get<C: Component>(&self, id: EntityId) -> Option<&C> {
-        let location = self.locations[id as usize];
-        let archetype = &self.archetypes[location.archetype_index as usize];
-        let &component_index = archetype.index.get(&TypeId::of::<C>())?;
-        let ptr = archetype.components[component_index];
-
-        Some(unsafe {
-            ptr.cast::<C>()
-                .add(location.entity_index as usize)
-                .as_ref()?
-        })
+        self.entity(id).get::<C>()
     }
 
     pub fn get_mut<C: Component>(&mut self, id: EntityId) -> Option<&mut C> {
-        let location = self.locations[id as usize];
-        let archetype = &self.archetypes[location.archetype_index as usize];
-        let &component_index = archetype.index.get(&TypeId::of::<C>())?;
-        let ptr = archetype.components[component_index];
-
-        Some(unsafe {
-            ptr.cast::<C>()
-                .add(location.entity_index as usize)
-                .as_mut()?
-        })
+        self.entity_mut(id).get::<C>()
     }
 
     pub fn entity(&self, id: EntityId) -> EntityHandle<'_> {
-        EntityHandle { id, world: self }
+        let location = self.locations[id as usize];
+
+        EntityHandle {
+            id,
+            entity_index: location.entity_index,
+            archetype: &self.archetypes[location.archetype_index as usize],
+        }
     }
 
     pub fn entity_mut(&mut self, id: EntityId) -> EntityHandleMut<'_> {
-        EntityHandleMut { id, world: self }
+        let location = self.locations[id as usize];
+
+        EntityHandleMut {
+            id,
+            entity_index: location.entity_index,
+            archetype: &mut self.archetypes[location.archetype_index as usize],
+        }
     }
 }
 
 #[derive(Clone, Copy)]
 pub struct EntityHandle<'w> {
     pub(crate) id: EntityId,
-    pub(crate) world: &'w World,
+    pub(crate) entity_index: u32,
+    pub(crate) archetype: &'w Archetype,
 }
 
-impl EntityHandle<'_> {
-    pub fn get<C: Component>(&self) -> Option<&C> {
-        self.world.get::<C>(self.id)
+impl<'w> EntityHandle<'w> {
+    pub fn get<C: Component>(&self) -> Option<&'w C> {
+        let &component_index = self.archetype.index.get(&TypeId::of::<C>())?;
+        let ptr = self.archetype.components[component_index];
+
+        Some(unsafe { ptr.cast::<C>().add(self.entity_index as usize).as_ref()? })
     }
 }
 
 pub struct EntityHandleMut<'w> {
     pub(crate) id: EntityId,
-    pub(crate) world: &'w mut World,
+    pub(crate) entity_index: u32,
+    pub(crate) archetype: &'w mut Archetype,
 }
 
-impl EntityHandleMut<'_> {
-    pub fn get_mut<C: Component>(&mut self) -> Option<&mut C> {
-        self.world.get_mut::<C>(self.id)
+impl<'w> EntityHandleMut<'w> {
+    pub fn get<C: Component>(&mut self) -> Option<&'w mut C> {
+        let &component_index = self.archetype.index.get(&TypeId::of::<C>())?;
+        let ptr = self.archetype.components[component_index];
+
+        Some(unsafe { ptr.cast::<C>().add(self.entity_index as usize).as_mut()? })
     }
 }
