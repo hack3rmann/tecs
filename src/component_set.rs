@@ -1,16 +1,28 @@
-use crate::{archetype::TypeInfo, Archetype, Component};
+use crate::{archetype::TypeInfo, archetype::Archetype, Component};
 use smallvec::SmallVec;
 use std::{any::TypeId, collections::HashMap};
 
-pub const N_STACK_TYPE_IDS: usize = 32;
+pub(crate) const N_STACK_TYPE_IDS: usize = 32;
 
+/// Represents a pack of components. Does not intended to implement it by hand.
+///
+/// # Safety
+///
+/// - new entity should be added immediately after `write_archetype`.
+/// - `component_infos` should sort `TypeInfo`s by their ids.
 pub unsafe trait ComponentSet: Sized + 'static {
+    /// The number of components inside this pack.
     const COMPONENT_COUNT: usize;
 
+    /// # Safety
+    ///
+    /// New entity should be added immediately after this call.
     unsafe fn write_archetype(self, archetype: &mut Archetype);
 
+    /// The information about each type in this type pack. Should be sorted by id.
     fn component_infos() -> impl AsRef<[TypeInfo]>;
 
+    /// Gives an index at which a given component pack lies.
     fn get_index(index: &HashMap<Box<[TypeId]>, usize>) -> Option<usize> {
         let ids: SmallVec<[TypeId; N_STACK_TYPE_IDS]> = Self::component_infos()
             .as_ref()
@@ -21,6 +33,7 @@ pub unsafe trait ComponentSet: Sized + 'static {
         index.get(&ids[..]).copied()
     }
 
+    /// Similar to `component_infos` but contains only IDs.
     fn component_ids() -> Box<[TypeId]> {
         Self::component_infos()
             .as_ref()
@@ -29,6 +42,7 @@ pub unsafe trait ComponentSet: Sized + 'static {
             .collect()
     }
 
+    /// Creates an archetype based on this component pack.
     fn make_archetype() -> Archetype {
         let types: Box<[TypeInfo]> = Self::component_infos().as_ref().to_owned().into();
 
@@ -54,6 +68,7 @@ unsafe impl<T: Component> ComponentSet for T {
     }
 }
 
+#[doc(hidden)]
 macro_rules! impl_tuple_component_set {
     ( @~count ) => { 0 };
 

@@ -42,6 +42,11 @@ impl TypeInfo {
     }
 }
 
+/// A group of components that are used together in entities.
+///
+/// # Note
+///
+/// Does not intended to use it by hand.
 #[derive(Debug)]
 pub struct Archetype {
     pub(crate) index: HashMap<TypeId, usize>,
@@ -52,21 +57,22 @@ pub struct Archetype {
 }
 
 impl Archetype {
+    /// Checks component `C` in this archetype.
     pub fn contains<C: Component>(&self) -> bool {
         self.component_types
             .binary_search(&TypeInfo::of::<C>())
             .is_ok()
     }
 
-    pub fn contains_all(&self, components: impl IntoIterator<Item = TypeId>) -> bool {
-        components.into_iter().all(|c| {
-            self.component_types
-                .binary_search_by_key(&c, |info| info.id)
-                .is_ok()
-        })
-    }
+    // pub fn contains_all(&self, components: impl IntoIterator<Item = TypeId>) -> bool {
+    //     components.into_iter().all(|c| {
+    //         self.component_types
+    //             .binary_search_by_key(&c, |info| info.id)
+    //             .is_ok()
+    //     })
+    // }
 
-    pub fn alloc(&mut self, cap: usize) {
+    pub(crate) fn alloc(&mut self, cap: usize) {
         use std::alloc::{alloc, handle_alloc_error};
 
         if cap == 0 {
@@ -98,7 +104,7 @@ impl Archetype {
         self.capacity = cap;
     }
 
-    pub fn reserve(&mut self, min_additional_capacity: usize) {
+    pub(crate) fn reserve(&mut self, min_additional_capacity: usize) {
         use std::alloc::{handle_alloc_error, realloc};
 
         if self.capacity - self.entities.len() >= min_additional_capacity {
@@ -145,7 +151,7 @@ impl Archetype {
         self.capacity = next_capacity;
     }
 
-    pub unsafe fn write_to_end<C: Component>(&mut self, value: C) {
+    pub(crate) unsafe fn write_to_end<C: Component>(&mut self, value: C) {
         let index = self.index[&TypeId::of::<C>()];
         let ptr = self.components[index].cast::<C>();
 

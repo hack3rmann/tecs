@@ -1,17 +1,88 @@
-#![allow(dead_code, clippy::missing_safety_doc)]
+//! # `tecs`
+//!
+//! ## About
+//!
+//! Simple implementation of popular data structure called 'Entity Component System' (or ECS for
+//! short).
+//!
+//! ## Goals
+//!
+//! The goal of this project is to provide simple API with simple implementation.
+//!
+//! ## Examples
+//!
+//! ### 1. Spawning an antity and retrieving its components.
+//!
+//! ```rust
+//! use tecs::{World, Component};
+//!
+//! #[derive(Debug, PartialEq)]
+//! struct Name(&'static str);
+//! impl Component for Name {}
+//!
+//! #[derive(Debug, PartialEq)]
+//! struct Age(u32);
+//! impl Component for Age {}
+//!
+//! let mut world = World::new();
+//!
+//! let id = world.spawn((Name("Marcus"), Age(21)));
+//! let entity = world.entity(id);
+//!
+//! assert_eq!(entity.get::<Name>(), Some(&Name("Marcus")));
+//! assert_eq!(entity.get::<Age>(), Some(&Age(21)));
+//! ```
+//!
+//! ### 2. Modifying the world through the query.
+//!
+//! ```rust
+//! use tecs::{World, Component, EntityId};
+//!
+//! struct CanFly;
+//! impl Component for CanFly {}
+//!
+//! #[derive(Clone, PartialEq, Debug)]
+//! struct Name(&'static str);
+//! impl Component for Name {}
+//!
+//! enum Color {
+//!     Red,
+//!     Green,
+//!     Blue,
+//! }
+//! impl Component for Color {}
+//!
+//! let mut world = World::new();
+//!
+//! let _entity1 = world.spawn((Name("Sky"), Color::Blue));
+//! let _entity2 = world.spawn((Name("Red Bird"), Color::Red, CanFly));
+//! let _entity3 = world.spawn((Name("Airplane"), CanFly));
+//!
+//! let mut can_fly_names = vec![];
+//!
+//! // you can also opt `EntityId` out if you want
+//! for (name, _can_fly, color) in world.query_mut::<(&Name, &CanFly, &mut Color)>() {
+//!     can_fly_names.push(name.clone());
+//!     // you can modify world through the `query_mut`
+//!     *color = Color::Green;
+//! }
+//!
+//! assert_eq!(can_fly_names, [Name("Red Bird")]);
+//! ```
+
+#![deny(missing_docs)]
 
 mod archetype;
 mod component_set;
 mod query;
-mod simple;
 mod world;
 
-pub use archetype::Archetype;
-pub use component_set::ComponentSet;
 pub use world::{Component, World};
 
-type EntityId = u32;
+/// Lightweight handle to an entity.
+pub type EntityId = u32;
 
+/// The location of a given entity in the data structure.
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct Location {
     pub entity_index: u32,
@@ -139,7 +210,7 @@ mod tests {
     }
 
     #[test]
-    fn gets() {
+    fn entity_get() {
         let mut world = World::default();
 
         let id = world.spawn((Name("John"), Age(99)));
@@ -167,6 +238,8 @@ mod tests {
             *name = Name("None");
         }
 
-        assert!(world.query_mut::<(&Name,)>().all(|(name,)| name == &Name("None")));
+        assert!(world
+            .query_mut::<(&Name,)>()
+            .all(|(name,)| name == &Name("None")));
     }
 }
