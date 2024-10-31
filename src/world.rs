@@ -1,5 +1,8 @@
-use crate::{Archetype, ComponentSet, Entity, Location};
-use std::{any::TypeId, collections::HashMap, slice};
+use crate::{
+    query::{Query, QueryMut},
+    Archetype, ComponentSet, Entity, Location,
+};
+use std::{any::TypeId, collections::HashMap};
 
 #[derive(Default)]
 pub struct World {
@@ -42,21 +45,14 @@ impl World {
         entity
     }
 
-    pub fn query_mut<C: Component>(&mut self) -> impl Iterator<Item = (Entity, &mut C)> {
-        self.archetypes
-            .iter_mut()
-            .filter(|arch| !arch.entities.is_empty() && arch.contains::<C>())
-            .flat_map(|arch| {
-                let components_index = arch.index[&TypeId::of::<C>()];
-                let mut ptr = arch.components[components_index].cast::<C>();
+    pub fn query<'w, Q: Query<'w>>(&'w mut self) -> impl Iterator<Item = Q::Output> + 'w {
+        Q::query(self)
+    }
 
-                if ptr.is_null() {
-                    ptr = std::ptr::NonNull::<C>::dangling().as_ptr();
-                }
-
-                let components = unsafe { slice::from_raw_parts_mut(ptr, arch.entities.len()) };
-
-                arch.entities.iter().copied().zip(components)
-            })
+    pub fn query_mut<'w, Q>(&'w mut self) -> impl Iterator<Item = Q::Output> + 'w
+    where
+        Q: QueryMut<'w>,
+    {
+        Q::query_mut(self)
     }
 }

@@ -4,6 +4,7 @@ mod archetype;
 mod component_set;
 mod simple;
 mod world;
+mod query;
 
 pub use archetype::Archetype;
 pub use component_set::ComponentSet;
@@ -46,25 +47,25 @@ mod tests {
         ];
 
         assert_eq!(
-            world.query_mut::<Name>().collect::<Vec<_>>(),
+            world.query::<(Entity, &Name)>().collect::<Vec<_>>(),
             [
-                (entities[0], &mut Name(String::from("First"))),
-                (entities[1], &mut Name(String::from("Second"))),
-                (entities[3], &mut Name(String::from("Third"))),
+                (entities[0], &Name(String::from("First"))),
+                (entities[1], &Name(String::from("Second"))),
+                (entities[3], &Name(String::from("Third"))),
             ],
         );
 
         assert_eq!(
-            world.query_mut::<Speed>().collect::<Vec<_>>(),
+            world.query::<(Entity, &Speed)>().collect::<Vec<_>>(),
             [
-                (entities[2], &mut Speed(42.0)),
-                (entities[4], &mut Speed(69.0)),
+                (entities[2], &Speed(42.0)),
+                (entities[4], &Speed(69.0)),
             ],
         );
 
         assert_eq!(
-            world.query_mut::<Tag>().collect::<Vec<_>>(),
-            [(entities[5], &mut Tag)],
+            world.query::<(Entity, &Tag)>().collect::<Vec<_>>(),
+            [(entities[5], &Tag)],
         );
     }
 
@@ -87,17 +88,17 @@ mod tests {
         ];
 
         assert_eq!(
-            world.query_mut::<Name>().collect::<Vec<_>>(),
+            world.query::<(Entity, &Name)>().collect::<Vec<_>>(),
             [
-                (entities[0], &mut Name(String::from("John"))),
-                (entities[1], &mut Name(String::from("Hannah"))),
-                (entities[2], &mut Name(String::from("Bob"))),
+                (entities[0], &Name(String::from("John"))),
+                (entities[1], &Name(String::from("Hannah"))),
+                (entities[2], &Name(String::from("Bob"))),
             ],
         );
 
         assert_eq!(
-            world.query_mut::<Age>().collect::<Vec<_>>(),
-            [(entities[0], &mut Age(18)), (entities[1], &mut Age(24)),],
+            world.query::<(Entity, &Age)>().collect::<Vec<_>>(),
+            [(entities[0], &Age(18)), (entities[1], &mut Age(24)),],
         );
     }
 }
