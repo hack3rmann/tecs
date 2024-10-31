@@ -1,10 +1,11 @@
 use crate::{Component, Entity};
 use std::{alloc::Layout, any::TypeId, collections::HashMap};
 
+#[derive(Clone, Debug)]
 pub struct TypeInfo {
-    pub id: TypeId,
-    pub layout: Layout,
-    pub drop: unsafe fn(*mut u8),
+    pub(crate) id: TypeId,
+    pub(crate) layout: Layout,
+    pub(crate) drop: unsafe fn(*mut u8),
 }
 
 impl std::cmp::PartialEq for TypeInfo {
@@ -41,6 +42,7 @@ impl TypeInfo {
     }
 }
 
+#[derive(Debug)]
 pub struct Archetype {
     pub(crate) index: HashMap<TypeId, usize>,
     pub(crate) component_types: Box<[TypeInfo]>,
@@ -50,16 +52,6 @@ pub struct Archetype {
 }
 
 impl Archetype {
-    pub fn new<C: Component>() -> Self {
-        Self {
-            component_types: Box::new([TypeInfo::of::<C>()]),
-            index: HashMap::from([(TypeId::of::<C>(), 0)]),
-            components: Box::new([std::ptr::null_mut()]),
-            capacity: 0,
-            entities: vec![],
-        }
-    }
-
     pub fn contains<C: Component>(&self) -> bool {
         self.component_types.contains(&TypeInfo::of::<C>())
     }
@@ -156,6 +148,10 @@ impl Archetype {
 impl Drop for Archetype {
     fn drop(&mut self) {
         use std::alloc::dealloc;
+
+        if self.capacity == 0 {
+            return;
+        }
 
         for (i, &components_ptr) in self.components.iter().enumerate() {
             let elem_layout = self.component_types[i].layout;
