@@ -22,27 +22,35 @@ pub(crate) struct Location {
 mod tests {
     use super::*;
 
+    #[derive(Debug, PartialEq)]
+    struct Name(&'static str);
+    impl Component for Name {}
+
+    #[derive(Debug, PartialEq)]
+    struct Age(u32);
+    impl Component for Age {}
+
+    #[derive(Debug, PartialEq)]
+    struct Height(f32);
+    impl Component for Height {}
+
+    #[derive(Debug, PartialEq)]
+    struct Speed(f32);
+    impl Component for Speed {}
+
+    #[derive(Debug, PartialEq)]
+    struct Tag;
+    impl Component for Tag {}
+
     #[test]
     fn single_component_archetype() {
-        #[derive(Debug, PartialEq)]
-        struct Name(String);
-        impl Component for Name {}
-
-        #[derive(Debug, PartialEq)]
-        struct Speed(f32);
-        impl Component for Speed {}
-
-        #[derive(Debug, PartialEq)]
-        struct Tag;
-        impl Component for Tag {}
-
         let mut world = World::default();
 
         let entities = [
-            world.spawn(Name(String::from("First"))),
-            world.spawn(Name(String::from("Second"))),
+            world.spawn(Name("First")),
+            world.spawn(Name("Second")),
             world.spawn(Speed(42.0)),
-            world.spawn(Name(String::from("Third"))),
+            world.spawn(Name("Third")),
             world.spawn(Speed(69.0)),
             world.spawn(Tag),
         ];
@@ -50,9 +58,9 @@ mod tests {
         assert_eq!(
             world.query::<(EntityId, &Name)>().collect::<Vec<_>>(),
             [
-                (entities[0], &Name(String::from("First"))),
-                (entities[1], &Name(String::from("Second"))),
-                (entities[3], &Name(String::from("Third"))),
+                (entities[0], &Name("First")),
+                (entities[1], &Name("Second")),
+                (entities[3], &Name("Third")),
             ],
         );
 
@@ -69,28 +77,20 @@ mod tests {
 
     #[test]
     fn two_components() {
-        #[derive(Debug, PartialEq)]
-        struct Name(String);
-        impl Component for Name {}
-
-        #[derive(Debug, PartialEq)]
-        struct Age(u32);
-        impl Component for Age {}
-
         let mut world = World::default();
 
         let entities = [
-            world.spawn((Name(String::from("John")), Age(18))),
-            world.spawn((Name(String::from("Hannah")), Age(24))),
-            world.spawn(Name(String::from("Bob"))),
+            world.spawn((Name("John"), Age(18))),
+            world.spawn((Name("Hannah"), Age(24))),
+            world.spawn(Name("Bob")),
         ];
 
         assert_eq!(
             world.query::<(EntityId, &Name)>().collect::<Vec<_>>(),
             [
-                (entities[0], &Name(String::from("John"))),
-                (entities[1], &Name(String::from("Hannah"))),
-                (entities[2], &Name(String::from("Bob"))),
+                (entities[0], &Name("John")),
+                (entities[1], &Name("Hannah")),
+                (entities[2], &Name("Bob")),
             ],
         );
 
@@ -102,60 +102,44 @@ mod tests {
 
     #[test]
     fn three_components() {
-        #[derive(Debug, PartialEq)]
-        struct Name(String);
-        impl Component for Name {}
-
-        #[derive(Debug, PartialEq)]
-        struct Age(u32);
-        impl Component for Age {}
-
-        #[derive(Debug, PartialEq)]
-        struct Height(f32);
-        impl Component for Height {}
-
         let mut world = World::default();
 
         let entities = [
-            world.spawn((Name(String::from("John")), Age(18))),
-            world.spawn((Name(String::from("Hannah")), Age(24))),
-            world.spawn((Name(String::from("Bob")), Height(160.0))),
-            world.spawn((Name(String::from("Alice")), Height(200.0), Age(19))),
+            world.spawn((Name("John"), Age(18))),
+            world.spawn((Name("Hannah"), Age(24))),
+            world.spawn((Name("Bob"), Height(160.0))),
+            world.spawn((Name("Alice"), Height(200.0), Age(19))),
         ];
 
         assert_eq!(
             world.query::<(EntityId, &Name, &Age)>().collect::<Vec<_>>(),
             [
-                (entities[0], &Name(String::from("John")), &Age(18)),
-                (entities[1], &Name(String::from("Hannah")), &Age(24)),
-                (entities[3], &Name(String::from("Alice")), &Age(19)),
+                (entities[0], &Name("John"), &Age(18)),
+                (entities[1], &Name("Hannah"), &Age(24)),
+                (entities[3], &Name("Alice"), &Age(19)),
             ],
         );
 
         assert_eq!(
-            world.query::<(EntityId, &Name, &Height)>().collect::<Vec<_>>(),
+            world
+                .query::<(EntityId, &Name, &Height)>()
+                .collect::<Vec<_>>(),
             [
-                (entities[2], &Name(String::from("Bob")), &Height(160.0)),
-                (entities[3], &Name(String::from("Alice")), &Height(200.0)),
+                (entities[2], &Name("Bob"), &Height(160.0)),
+                (entities[3], &Name("Alice"), &Height(200.0)),
             ],
         );
 
         assert_eq!(
-            world.query::<(EntityId, &Age, &Height)>().collect::<Vec<_>>(),
+            world
+                .query::<(EntityId, &Age, &Height)>()
+                .collect::<Vec<_>>(),
             [(entities[3], &Age(19), &Height(200.0)),],
         );
     }
 
     #[test]
     fn gets() {
-        #[derive(Debug, PartialEq)]
-        struct Name(&'static str);
-        impl Component for Name {}
-
-        #[derive(Debug, PartialEq)]
-        struct Age(u32);
-        impl Component for Age {}
-
         let mut world = World::default();
 
         let id = world.spawn((Name("John"), Age(99)));
@@ -163,5 +147,26 @@ mod tests {
 
         assert_eq!(entity.get::<Name>(), Some(&Name("John")));
         assert_eq!(entity.get::<Age>(), Some(&Age(99)));
+    }
+
+    #[test]
+    fn mut_query_shared() {
+        let mut world = World::default();
+
+        world.spawn((Name("Kristie"), Height(67.0), Age(9)));
+        world.spawn((Name("Jordan"), Height(89.0), Age(10)));
+        world.spawn((Name("Bob"), Height(101.0), Age(11)));
+        world.spawn((Name("Michael"), Height(42.0), Age(12)));
+        world.spawn((Name("Dave"), Height(34.0), Age(13)));
+        world.spawn((Name("Paul"), Height(890.0), Age(14)));
+        world.spawn((Name("Joseph"), Height(67.0), Age(15)));
+        world.spawn((Name("Alex"), Height(67.0), Age(16)));
+        world.spawn((Name("Steve"), Height(67.0), Age(17)));
+
+        for (_entity, name, _age) in world.query_mut::<(EntityId, &mut Name, &Age)>() {
+            *name = Name("None");
+        }
+
+        assert!(world.query_mut::<(&Name,)>().all(|(name,)| name == &Name("None")));
     }
 }
