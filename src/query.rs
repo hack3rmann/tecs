@@ -145,6 +145,9 @@ impl<'w, T: Component> QueryMut<'w> for &'w mut T {
 // }
 
 macro_rules! impl_query {
+    ( @map ) => {
+        |x| (x,)
+    };
     ( @map $A:ident ) => {
         |(x, y)| (x, y)
     };
@@ -166,8 +169,8 @@ macro_rules! impl_query {
     ( @map $A:ident $B:ident $C:ident $D:ident $E:ident $F:ident $G:ident ) => {
         |(((((((a, b), c), d), e), f), g), h)| (a, b, c, d, e, f, g, h)
     };
-    ( $( $T:ident )+ ) => {
-        impl<'w, $( $T: Component, )+ > Query<'w> for (Entity, $( &'w $T, )+ ) {
+    ( $T:ident $( $Tail:ident )* ) => {
+        impl<'w, $T: Component, $( $Tail: Component, )* > Query<'w> for (Entity, &'w $T, $( &'w $Tail, )* ) {
             type Output = Self;
 
             fn query(world: &'w World) -> impl Iterator<Item = Self::Output> + 'w {
@@ -176,27 +179,80 @@ macro_rules! impl_query {
                     .iter()
                     .filter(move |arch| {
                         !arch.entities.is_empty()
+                            && arch.contains::< $T >()
                             $(
-                                && arch.contains::< $T >()
-                            )+
+                                && arch.contains::< $Tail >()
+                            )*
                     })
                     .flat_map(move |arch| {
                         arch.entities
                             .iter()
                             .copied()
+                            .zip({
+                                let components_index = arch.index[&TypeId::of::< $T >()];
+                                let mut ptr = arch.components[components_index].cast::< $T >();
+
+                                if ptr.is_null() {
+                                    ptr = std::ptr::NonNull::< $T >::dangling().as_ptr();
+                                }
+
+                                unsafe { slice::from_raw_parts(ptr, arch.entities.len()) }
+                            })
                             $(
                                 .zip({
-                                    let components_index = arch.index[&TypeId::of::< $T >()];
-                                    let mut ptr = arch.components[components_index].cast::< $T >();
+                                    let components_index = arch.index[&TypeId::of::< $Tail >()];
+                                    let mut ptr = arch.components[components_index].cast::< $Tail >();
 
                                     if ptr.is_null() {
-                                        ptr = std::ptr::NonNull::< $T >::dangling().as_ptr();
+                                        ptr = std::ptr::NonNull::< $Tail >::dangling().as_ptr();
                                     }
 
                                     unsafe { slice::from_raw_parts(ptr, arch.entities.len()) }
                                 })
-                            )+
-                            .map(impl_query!(@map $( $T )+ ))
+                            )*
+                            .map(impl_query!(@map $T $( $Tail )* ))
+                    })
+            }
+        }
+
+        impl<'w, $T: Component, $( $Tail: Component, )* > Query<'w> for (&'w $T, $( &'w $Tail, )* ) {
+            type Output = Self;
+
+            fn query(world: &'w World) -> impl Iterator<Item = Self::Output> + 'w {
+                world
+                    .archetypes
+                    .iter()
+                    .filter(move |arch| {
+                        !arch.entities.is_empty()
+                            && arch.contains::< $T >()
+                            $(
+                                && arch.contains::< $Tail >()
+                            )*
+                    })
+                    .flat_map(move |arch| {
+                        {
+                            let components_index = arch.index[&TypeId::of::< $T >()];
+                            let mut ptr = arch.components[components_index].cast::< $T >();
+
+                            if ptr.is_null() {
+                                ptr = std::ptr::NonNull::< $T >::dangling().as_ptr();
+                            }
+
+                            unsafe { slice::from_raw_parts(ptr, arch.entities.len()) }
+                        }.into_iter()
+                            $(
+                                .zip({
+                                    let components_index = arch.index[&TypeId::of::< $Tail >()];
+                                    let mut ptr = arch.components[components_index].cast::< $Tail >();
+
+                                    if ptr.is_null() {
+                                        ptr = std::ptr::NonNull::< $Tail >::dangling().as_ptr();
+                                    }
+
+                                    unsafe { slice::from_raw_parts(ptr, arch.entities.len()) }
+                                })
+                            )*
+                            .map(impl_query!(@map $( $Tail )* ))
                     })
             }
         }
