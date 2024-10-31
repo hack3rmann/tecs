@@ -10,8 +10,9 @@ pub use archetype::Archetype;
 pub use component_set::ComponentSet;
 pub use world::{Component, World};
 
-type Entity = u32;
+type EntityId = u32;
 
+#[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct Location {
     pub entity_index: u32,
     pub archetype_index: u32,
@@ -47,7 +48,7 @@ mod tests {
         ];
 
         assert_eq!(
-            world.query::<(Entity, &Name)>().collect::<Vec<_>>(),
+            world.query::<(EntityId, &Name)>().collect::<Vec<_>>(),
             [
                 (entities[0], &Name(String::from("First"))),
                 (entities[1], &Name(String::from("Second"))),
@@ -56,12 +57,12 @@ mod tests {
         );
 
         assert_eq!(
-            world.query::<(Entity, &Speed)>().collect::<Vec<_>>(),
+            world.query::<(EntityId, &Speed)>().collect::<Vec<_>>(),
             [(entities[2], &Speed(42.0)), (entities[4], &Speed(69.0)),],
         );
 
         assert_eq!(
-            world.query::<(Entity, &Tag)>().collect::<Vec<_>>(),
+            world.query::<(EntityId, &Tag)>().collect::<Vec<_>>(),
             [(entities[5], &Tag)],
         );
     }
@@ -85,7 +86,7 @@ mod tests {
         ];
 
         assert_eq!(
-            world.query::<(Entity, &Name)>().collect::<Vec<_>>(),
+            world.query::<(EntityId, &Name)>().collect::<Vec<_>>(),
             [
                 (entities[0], &Name(String::from("John"))),
                 (entities[1], &Name(String::from("Hannah"))),
@@ -94,7 +95,7 @@ mod tests {
         );
 
         assert_eq!(
-            world.query::<(Entity, &Age)>().collect::<Vec<_>>(),
+            world.query::<(EntityId, &Age)>().collect::<Vec<_>>(),
             [(entities[0], &Age(18)), (entities[1], &mut Age(24)),],
         );
     }
@@ -123,7 +124,7 @@ mod tests {
         ];
 
         assert_eq!(
-            world.query::<(Entity, &Name, &Age)>().collect::<Vec<_>>(),
+            world.query::<(EntityId, &Name, &Age)>().collect::<Vec<_>>(),
             [
                 (entities[0], &Name(String::from("John")), &Age(18)),
                 (entities[1], &Name(String::from("Hannah")), &Age(24)),
@@ -132,7 +133,7 @@ mod tests {
         );
 
         assert_eq!(
-            world.query::<(Entity, &Name, &Height)>().collect::<Vec<_>>(),
+            world.query::<(EntityId, &Name, &Height)>().collect::<Vec<_>>(),
             [
                 (entities[2], &Name(String::from("Bob")), &Height(160.0)),
                 (entities[3], &Name(String::from("Alice")), &Height(200.0)),
@@ -140,8 +141,27 @@ mod tests {
         );
 
         assert_eq!(
-            world.query::<(Entity, &Age, &Height)>().collect::<Vec<_>>(),
+            world.query::<(EntityId, &Age, &Height)>().collect::<Vec<_>>(),
             [(entities[3], &Age(19), &Height(200.0)),],
         );
+    }
+
+    #[test]
+    fn gets() {
+        #[derive(Debug, PartialEq)]
+        struct Name(&'static str);
+        impl Component for Name {}
+
+        #[derive(Debug, PartialEq)]
+        struct Age(u32);
+        impl Component for Age {}
+
+        let mut world = World::default();
+
+        let id = world.spawn((Name("John"), Age(99)));
+        let entity = world.entity(id);
+
+        assert_eq!(entity.get::<Name>(), Some(&Name("John")));
+        assert_eq!(entity.get::<Age>(), Some(&Age(99)));
     }
 }

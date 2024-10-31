@@ -1,7 +1,7 @@
 use core::slice;
 use std::any::TypeId;
 
-use crate::{Component, Entity, World};
+use crate::{Component, EntityId, World};
 
 pub trait Query<'w>: Sized + 'w {
     type Output: 'w;
@@ -38,7 +38,7 @@ impl<'w, T: Component> Query<'w> for &'w T {
     }
 }
 
-impl<'w, T: Component> QueryMut<'w> for (Entity, &'w mut T) {
+impl<'w, T: Component> QueryMut<'w> for (EntityId, &'w mut T) {
     type Output = Self;
 
     fn query_mut(world: &'w mut World) -> impl Iterator<Item = Self::Output> + 'w {
@@ -110,7 +110,7 @@ macro_rules! impl_query {
         |(((((((a, b), c), d), e), f), g), h)| (a, b, c, d, e, f, g, h)
     };
     ( $T:ident $( $Tail:ident )* ) => {
-        impl<'w, $T: Component, $( $Tail: Component, )* > Query<'w> for (Entity, &'w $T, $( &'w $Tail, )* ) {
+        impl<'w, $T: Component, $( $Tail: Component, )* > Query<'w> for (EntityId, &'w $T, $( &'w $Tail, )* ) {
             type Output = Self;
 
             fn query(world: &'w World) -> impl Iterator<Item = Self::Output> + 'w {

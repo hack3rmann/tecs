@@ -1,4 +1,4 @@
-use crate::{Component, Entity};
+use crate::{Component, EntityId};
 use std::{alloc::Layout, any::TypeId, collections::HashMap};
 
 #[derive(Clone, Debug)]
@@ -48,7 +48,7 @@ pub struct Archetype {
     pub(crate) component_types: Box<[TypeInfo]>,
     pub(crate) components: Box<[*mut u8]>,
     pub(crate) capacity: usize,
-    pub(crate) entities: Vec<Entity>,
+    pub(crate) entities: Vec<EntityId>,
 }
 
 impl Archetype {
