@@ -12,6 +12,26 @@ pub struct TypeInfo {
     pub drop: unsafe fn(*mut u8),
 }
 
+impl std::cmp::PartialEq for TypeInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl std::cmp::Eq for TypeInfo {}
+
+impl std::cmp::PartialOrd for TypeInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl std::cmp::Ord for TypeInfo {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
 impl TypeInfo {
     pub fn of<T: 'static>() -> Self {
         unsafe fn drop<T>(ptr: *mut u8) {
@@ -45,6 +65,10 @@ impl Archetype {
         }
     }
 
+    pub fn contains<C: Component>(&self) -> bool {
+        self.component_types.contains(&TypeInfo::of::<C>())
+    }
+
     pub fn alloc(&mut self, cap: usize) {
         use std::alloc::{alloc, handle_alloc_error};
 
@@ -55,6 +79,10 @@ impl Archetype {
         for (type_info, components_ptr) in
             self.component_types.iter().zip(self.components.iter_mut())
         {
+            if type_info.layout.size() == 0 {
+                continue;
+            }
+
             let Ok(layout) =
                 Layout::from_size_align(cap * type_info.layout.size(), type_info.layout.align())
             else {
@@ -73,14 +101,28 @@ impl Archetype {
         self.capacity = cap;
     }
 
-    pub fn realloc(&mut self) {
+    pub fn reserve(&mut self, min_additional_capacity: usize) {
         use std::alloc::{handle_alloc_error, realloc};
 
-        let next_capacity = 3 * (self.capacity + 1) / 2;
+        if self.capacity - self.entities.len() >= min_additional_capacity {
+            return;
+        }
+
+        if self.capacity == 0 {
+            self.alloc(min_additional_capacity);
+            return;
+        }
+
+        let additional_capacity = min_additional_capacity.max(self.capacity / 2 + 1);
+        let next_capacity = self.capacity + additional_capacity;
 
         for (type_info, components_ptr) in
             self.component_types.iter().zip(self.components.iter_mut())
         {
+            if type_info.layout.size() == 0 {
+                continue;
+            }
+
             let Ok(prev_layout) = Layout::from_size_align(
                 self.capacity * type_info.layout.size(),
                 type_info.layout.align(),
@@ -105,23 +147,6 @@ impl Archetype {
 
         self.capacity = next_capacity;
     }
-
-    pub fn add_component<C: Component>(&mut self, value: C) {
-        assert_eq!(self.component_types.len(), 1);
-
-        if self.capacity == 0 {
-            self.alloc(1);
-        } else if self.entities.len() == self.capacity {
-            self.realloc();
-        }
-
-        let index = self.index[&TypeId::of::<C>()];
-        let ptr = self.components[index].cast::<C>();
-
-        unsafe {
-            ptr.add(self.entities.len()).write(value);
-        }
-    }
 }
 
 impl Drop for Archetype {
@@ -138,6 +163,10 @@ impl Drop for Archetype {
             else {
                 continue;
             };
+
+            if components_ptr.is_null() {
+                continue;
+            }
 
             for j in 0..self.entities.len() {
                 unsafe {
@@ -166,17 +195,95 @@ pub struct World {
 
 pub trait Component: Sized + 'static {}
 
+pub trait ComponentSet: Sized + 'static {
+    unsafe fn write_archetype(self, archetype: &mut Archetype);
+    fn get_index(index: &HashMap<Box<[TypeId]>, usize>) -> Option<usize>;
+    fn set_types() -> Box<[TypeId]>;
+    fn make_archetype() -> Archetype;
+}
+
+impl<T: Component> ComponentSet for T {
+    unsafe fn write_archetype(self, archetype: &mut Archetype) {
+        archetype.reserve(1);
+
+        let index = archetype.index[&TypeId::of::<T>()];
+        let ptr = archetype.components[index].cast::<T>();
+
+        unsafe {
+            ptr.add(archetype.entities.len()).write(self);
+        }
+    }
+
+    fn get_index(index: &HashMap<Box<[TypeId]>, usize>) -> Option<usize> {
+        index.get(&[TypeId::of::<T>()][..]).copied()
+    }
+
+    fn set_types() -> Box<[TypeId]> {
+        Box::new([TypeId::of::<T>()])
+    }
+
+    fn make_archetype() -> Archetype {
+        Archetype::new::<T>()
+    }
+}
+
+impl<T: Component, S: Component> ComponentSet for (T, S) {
+    unsafe fn write_archetype(self, archetype: &mut Archetype) {
+        archetype.reserve(2);
+
+        let index = archetype.index[&TypeId::of::<T>()];
+        let ptr = archetype.components[index].cast::<T>();
+
+        unsafe {
+            ptr.add(archetype.entities.len()).write(self.0);
+        }
+
+        let index = archetype.index[&TypeId::of::<S>()];
+        let ptr = archetype.components[index].cast::<S>();
+
+        unsafe {
+            ptr.add(archetype.entities.len()).write(self.1);
+        }
+    }
+
+    fn get_index(index: &HashMap<Box<[TypeId]>, usize>) -> Option<usize> {
+        let mut ids = [TypeId::of::<T>(), TypeId::of::<S>()];
+        ids.sort_unstable();
+
+        index.get(&ids[..]).copied()
+    }
+
+    fn set_types() -> Box<[TypeId]> {
+        let mut ids = Box::new([TypeId::of::<T>(), TypeId::of::<S>()]);
+        ids.sort_unstable();
+        ids
+    }
+
+    fn make_archetype() -> Archetype {
+        let mut ids = [TypeInfo::of::<T>(), TypeInfo::of::<S>()];
+        ids.sort_unstable_by_key(|x| x.id);
+
+        Archetype {
+            capacity: 0,
+            index: HashMap::from([(ids[0].id, 0), (ids[1].id, 1)]),
+            component_types: Box::new(ids),
+            components: Box::new([std::ptr::null_mut(), std::ptr::null_mut()]),
+            entities: vec![],
+        }
+    }
+}
+
 impl World {
-    pub fn spawn<C: Component>(&mut self, component: C) -> Entity {
+    pub fn spawn<S: ComponentSet>(&mut self, set: S) -> Entity {
         let entity = self.locations.len() as Entity;
 
-        let archetype_index = match self.index.get(&[TypeId::of::<C>()][..]) {
-            Some(&index) => index,
+        let archetype_index = match S::get_index(&self.index) {
+            Some(index) => index,
             None => {
-                let archetype = Archetype::new::<C>();
+                let archetype = S::make_archetype();
                 let index = self.archetypes.len();
 
-                self.index.insert(Box::new([TypeId::of::<C>()]), index);
+                self.index.insert(S::set_types(), index);
                 self.archetypes.push(archetype);
 
                 index
@@ -190,26 +297,31 @@ impl World {
         };
 
         self.locations.push(location);
-        self.archetypes[archetype_index].add_component(component);
+        unsafe {
+            set.write_archetype(&mut self.archetypes[archetype_index]);
+        }
         self.archetypes[archetype_index].entities.push(entity);
 
         entity
     }
 
     pub fn query_mut<C: Component>(&mut self) -> impl Iterator<Item = (Entity, &mut C)> {
-        // TODO: fetch all archetypes that contains C component
-        let archetype_index = self.index[&[TypeId::of::<C>()][..]];
-        let components_index = self.archetypes[archetype_index].index[&TypeId::of::<C>()];
-        let components_ptr = self.archetypes[archetype_index].components[components_index];
-        let components_len = self.archetypes[archetype_index].entities.len();
-        let components =
-            unsafe { slice::from_raw_parts_mut(components_ptr.cast(), components_len) };
+        self.archetypes.iter_mut()
+            .filter(|arch| !arch.entities.is_empty() && arch.contains::<C>())
+            .flat_map(|arch| {
+                let components_index = arch.index[&TypeId::of::<C>()];
+                let mut ptr = arch.components[components_index].cast::<C>();
 
-        self.archetypes[archetype_index]
-            .entities
-            .iter()
-            .copied()
-            .zip(components)
+                if ptr.is_null() {
+                    ptr = std::ptr::NonNull::<C>::dangling().as_ptr();
+                }
+
+                let components = unsafe {
+                    slice::from_raw_parts_mut(ptr, arch.entities.len())
+                };
+
+                arch.entities.iter().copied().zip(components)
+            })
     }
 }
 
@@ -262,6 +374,42 @@ mod tests {
         assert_eq!(
             world.query_mut::<Tag>().collect::<Vec<_>>(),
             [(entities[5], &mut Tag)],
+        );
+    }
+
+    #[test]
+    fn two_components() {
+        #[derive(Debug, PartialEq)]
+        struct Name(String);
+        impl Component for Name {}
+
+        #[derive(Debug, PartialEq)]
+        struct Age(u32);
+        impl Component for Age {}
+
+        let mut world = World::default();
+
+        let entities = [
+            world.spawn((Name(String::from("John")), Age(18))),
+            world.spawn((Name(String::from("Hannah")), Age(24))),
+            world.spawn(Name(String::from("Bob"))),
+        ];
+
+        assert_eq!(
+            world.query_mut::<Name>().collect::<Vec<_>>(),
+            [
+                (entities[0], &mut Name(String::from("John"))),
+                (entities[1], &mut Name(String::from("Hannah"))),
+                (entities[2], &mut Name(String::from("Bob"))),
+            ],
+        );
+
+        assert_eq!(
+            world.query_mut::<Age>().collect::<Vec<_>>(),
+            [
+                (entities[0], &mut Age(18)),
+                (entities[1], &mut Age(24)),
+            ],
         );
     }
 }
