@@ -53,7 +53,17 @@ pub struct Archetype {
 
 impl Archetype {
     pub fn contains<C: Component>(&self) -> bool {
-        self.component_types.contains(&TypeInfo::of::<C>())
+        self.component_types
+            .binary_search(&TypeInfo::of::<C>())
+            .is_ok()
+    }
+
+    pub fn contains_all(&self, components: impl IntoIterator<Item = TypeId>) -> bool {
+        components.into_iter().all(|c| {
+            self.component_types
+                .binary_search_by_key(&c, |info| info.id)
+                .is_ok()
+        })
     }
 
     pub fn alloc(&mut self, cap: usize) {

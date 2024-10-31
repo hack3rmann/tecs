@@ -1,19 +1,36 @@
 use crate::{archetype::TypeInfo, Archetype, Component};
+use smallvec::SmallVec;
 use std::{any::TypeId, collections::HashMap};
+
+pub const N_STACK_TYPE_IDS: usize = 32;
 
 pub unsafe trait ComponentSet: Sized + 'static {
     const COMPONENT_COUNT: usize;
 
     unsafe fn write_archetype(self, archetype: &mut Archetype);
 
-    fn get_index(index: &HashMap<Box<[TypeId]>, usize>) -> Option<usize>;
+    fn component_infos() -> impl AsRef<[TypeInfo]>;
 
-    fn component_ids() -> Box<[TypeId]>;
+    fn get_index(index: &HashMap<Box<[TypeId]>, usize>) -> Option<usize> {
+        let ids: SmallVec<[TypeId; N_STACK_TYPE_IDS]> = Self::component_infos()
+            .as_ref()
+            .iter()
+            .map(|info| info.id)
+            .collect();
 
-    fn component_type_infos() -> Box<[TypeInfo]>;
+        index.get(&ids[..]).copied()
+    }
+
+    fn component_ids() -> Box<[TypeId]> {
+        Self::component_infos()
+            .as_ref()
+            .iter()
+            .map(|info| info.id)
+            .collect()
+    }
 
     fn make_archetype() -> Archetype {
-        let types = Self::component_type_infos();
+        let types: Box<[TypeInfo]> = Self::component_infos().as_ref().to_owned().into();
 
         Archetype {
             capacity: 0,
@@ -32,16 +49,8 @@ unsafe impl<T: Component> ComponentSet for T {
         (self,).write_archetype(archetype);
     }
 
-    fn get_index(index: &HashMap<Box<[TypeId]>, usize>) -> Option<usize> {
-        <(T,) as ComponentSet>::get_index(index)
-    }
-
-    fn component_ids() -> Box<[TypeId]> {
-        <(T,) as ComponentSet>::component_ids()
-    }
-
-    fn component_type_infos() -> Box<[TypeInfo]> {
-        <(T,) as ComponentSet>::component_type_infos()
+    fn component_infos() -> impl AsRef<[TypeInfo]> {
+        <(T,) as ComponentSet>::component_infos()
     }
 }
 
@@ -65,33 +74,12 @@ macro_rules! impl_tuple_component_set {
                 )+
             }
 
-            fn get_index(index: &HashMap<Box<[TypeId]>, usize>) -> Option<usize> {
+            fn component_infos() -> impl AsRef<[TypeInfo]> {
                 let mut ids = [
-                    $(
-                        TypeId::of::< $T >(),
-                    )+
-                ];
-                ids.sort_unstable();
-
-                index.get(&ids[..]).copied()
-            }
-
-            fn component_ids() -> Box<[TypeId]> {
-                let mut ids = Box::new([
-                    $(
-                        TypeId::of::< $T >(),
-                    )+
-                ]);
-                ids.sort_unstable();
-                ids
-            }
-
-            fn component_type_infos() -> Box<[TypeInfo]> {
-                let mut ids = Box::new([
                     $(
                         TypeInfo::of::< $T >(),
                     )+
-                ]);
+                ];
                 ids.sort_unstable_by_key(|info| info.id);
                 ids
             }

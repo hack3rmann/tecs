@@ -7,7 +7,7 @@ mod world;
 
 pub use archetype::Archetype;
 pub use component_set::ComponentSet;
-pub use world::{World, Component};
+pub use world::{Component, World};
 
 type Entity = u32;
 
