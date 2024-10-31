@@ -2,9 +2,9 @@
 
 mod archetype;
 mod component_set;
+mod query;
 mod simple;
 mod world;
-mod query;
 
 pub use archetype::Archetype;
 pub use component_set::ComponentSet;
@@ -57,10 +57,7 @@ mod tests {
 
         assert_eq!(
             world.query::<(Entity, &Speed)>().collect::<Vec<_>>(),
-            [
-                (entities[2], &Speed(42.0)),
-                (entities[4], &Speed(69.0)),
-            ],
+            [(entities[2], &Speed(42.0)), (entities[4], &Speed(69.0)),],
         );
 
         assert_eq!(
@@ -99,6 +96,52 @@ mod tests {
         assert_eq!(
             world.query::<(Entity, &Age)>().collect::<Vec<_>>(),
             [(entities[0], &Age(18)), (entities[1], &mut Age(24)),],
+        );
+    }
+
+    #[test]
+    fn three_components() {
+        #[derive(Debug, PartialEq)]
+        struct Name(String);
+        impl Component for Name {}
+
+        #[derive(Debug, PartialEq)]
+        struct Age(u32);
+        impl Component for Age {}
+
+        #[derive(Debug, PartialEq)]
+        struct Height(f32);
+        impl Component for Height {}
+
+        let mut world = World::default();
+
+        let entities = [
+            world.spawn((Name(String::from("John")), Age(18))),
+            world.spawn((Name(String::from("Hannah")), Age(24))),
+            world.spawn((Name(String::from("Bob")), Height(160.0))),
+            world.spawn((Name(String::from("Alice")), Height(200.0), Age(19))),
+        ];
+
+        assert_eq!(
+            world.query::<(Entity, &Name, &Age)>().collect::<Vec<_>>(),
+            [
+                (entities[0], &Name(String::from("John")), &Age(18)),
+                (entities[1], &Name(String::from("Hannah")), &Age(24)),
+                (entities[3], &Name(String::from("Alice")), &Age(19)),
+            ],
+        );
+
+        assert_eq!(
+            world.query::<(Entity, &Name, &Height)>().collect::<Vec<_>>(),
+            [
+                (entities[2], &Name(String::from("Bob")), &Height(160.0)),
+                (entities[3], &Name(String::from("Alice")), &Height(200.0)),
+            ],
+        );
+
+        assert_eq!(
+            world.query::<(Entity, &Age, &Height)>().collect::<Vec<_>>(),
+            [(entities[3], &Age(19), &Height(200.0)),],
         );
     }
 }

@@ -15,28 +15,28 @@ pub trait QueryMut<'w>: Sized + 'w {
     fn query_mut(world: &'w mut World) -> impl Iterator<Item = Self::Output> + 'w;
 }
 
-impl<'w, T: Component> Query<'w> for (Entity, &'w T) {
-    type Output = Self;
+// impl<'w, T: Component> Query<'w> for (Entity, &'w T) {
+//     type Output = Self;
 
-    fn query(world: &'w World) -> impl Iterator<Item = Self::Output> + 'w {
-        world
-            .archetypes
-            .iter()
-            .filter(move |arch| !arch.entities.is_empty() && arch.contains::<T>())
-            .flat_map(move |arch| {
-                let components_index = arch.index[&TypeId::of::<T>()];
-                let mut ptr = arch.components[components_index].cast::<T>();
+//     fn query(world: &'w World) -> impl Iterator<Item = Self::Output> + 'w {
+//         world
+//             .archetypes
+//             .iter()
+//             .filter(move |arch| !arch.entities.is_empty() && arch.contains::<T>())
+//             .flat_map(move |arch| {
+//                 let components_index = arch.index[&TypeId::of::<T>()];
+//                 let mut ptr = arch.components[components_index].cast::<T>();
 
-                if ptr.is_null() {
-                    ptr = std::ptr::NonNull::<T>::dangling().as_ptr();
-                }
+//                 if ptr.is_null() {
+//                     ptr = std::ptr::NonNull::<T>::dangling().as_ptr();
+//                 }
 
-                let components = unsafe { slice::from_raw_parts(ptr, arch.entities.len()) };
+//                 let components = unsafe { slice::from_raw_parts(ptr, arch.entities.len()) };
 
-                arch.entities.iter().copied().zip(components)
-            })
-    }
-}
+//                 arch.entities.iter().copied().zip(components)
+//             })
+//     }
+// }
 
 impl<'w, T: Component> Query<'w> for &'w T {
     type Output = Self;
@@ -106,3 +106,107 @@ impl<'w, T: Component> QueryMut<'w> for &'w mut T {
             })
     }
 }
+
+// impl<'w, T: Component, S: Component> Query<'w> for (Entity, &'w T, &'w S) {
+//     type Output = Self;
+
+//     fn query(world: &'w World) -> impl Iterator<Item = Self::Output> + 'w {
+//         world
+//             .archetypes
+//             .iter()
+//             .filter(move |arch| !arch.entities.is_empty() && arch.contains::<T>())
+//             .flat_map(move |arch| {
+//                 arch.entities
+//                     .iter()
+//                     .copied()
+//                     .zip({
+//                         let components_index = arch.index[&TypeId::of::<T>()];
+//                         let mut ptr = arch.components[components_index].cast::<T>();
+
+//                         if ptr.is_null() {
+//                             ptr = std::ptr::NonNull::<T>::dangling().as_ptr();
+//                         }
+
+//                         unsafe { slice::from_raw_parts(ptr, arch.entities.len()) }
+//                     })
+//                     .zip({
+//                         let components_index = arch.index[&TypeId::of::<S>()];
+//                         let mut ptr = arch.components[components_index].cast::<S>();
+
+//                         if ptr.is_null() {
+//                             ptr = std::ptr::NonNull::<S>::dangling().as_ptr();
+//                         }
+
+//                         unsafe { slice::from_raw_parts(ptr, arch.entities.len()) }
+//                     })
+//                     .map(|((x, y), z)| (x, y, z))
+//             })
+//     }
+// }
+
+macro_rules! impl_query {
+    ( @map $A:ident ) => {
+        |(x, y)| (x, y)
+    };
+    ( @map $A:ident $B:ident ) => {
+        |((x, y), z)| (x, y, z)
+    };
+    ( @map $A:ident $B:ident $C:ident ) => {
+        |(((x, y), z), w)| (x, y, z, w)
+    };
+    ( @map $A:ident $B:ident $C:ident $D:ident ) => {
+        |((((a, b), c), d), e)| (a, b, c, d, e)
+    };
+    ( @map $A:ident $B:ident $C:ident $D:ident $E:ident ) => {
+        |(((((a, b), c), d), e), f)| (a, b, c, d, e, f)
+    };
+    ( @map $A:ident $B:ident $C:ident $D:ident $E:ident $F:ident ) => {
+        |((((((a, b), c), d), e), f), g)| (a, b, c, d, e, f, g)
+    };
+    ( @map $A:ident $B:ident $C:ident $D:ident $E:ident $F:ident $G:ident ) => {
+        |(((((((a, b), c), d), e), f), g), h)| (a, b, c, d, e, f, g, h)
+    };
+    ( $( $T:ident )+ ) => {
+        impl<'w, $( $T: Component, )+ > Query<'w> for (Entity, $( &'w $T, )+ ) {
+            type Output = Self;
+
+            fn query(world: &'w World) -> impl Iterator<Item = Self::Output> + 'w {
+                world
+                    .archetypes
+                    .iter()
+                    .filter(move |arch| {
+                        !arch.entities.is_empty()
+                            $(
+                                && arch.contains::< $T >()
+                            )+
+                    })
+                    .flat_map(move |arch| {
+                        arch.entities
+                            .iter()
+                            .copied()
+                            $(
+                                .zip({
+                                    let components_index = arch.index[&TypeId::of::< $T >()];
+                                    let mut ptr = arch.components[components_index].cast::< $T >();
+
+                                    if ptr.is_null() {
+                                        ptr = std::ptr::NonNull::< $T >::dangling().as_ptr();
+                                    }
+
+                                    unsafe { slice::from_raw_parts(ptr, arch.entities.len()) }
+                                })
+                            )+
+                            .map(impl_query!(@map $( $T )+ ))
+                    })
+            }
+        }
+    };
+}
+
+impl_query! { A }
+impl_query! { A B }
+impl_query! { A B C }
+impl_query! { A B C D }
+impl_query! { A B C D E }
+impl_query! { A B C D E F }
+impl_query! { A B C D E F G }
