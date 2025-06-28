@@ -2,7 +2,7 @@
 
 ## About
 
-Simple implementation of popular data structure called 'Entity Component System' (or ECS for
+Simple implementation of convinient data structure called 'Entity Component System' (or ECS for
 short).
 
 ## Goals
@@ -11,7 +11,7 @@ The goal of this project is to provide simple API with simple implementation.
 
 ## Examples
 
-### 1. Spawning an antity and retrieving its components.
+### 1. Spawning an entity and retrieving its components.
 
 ```rust
 use tecs::{World, Component};
