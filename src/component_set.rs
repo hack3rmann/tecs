@@ -60,7 +60,7 @@ unsafe impl<T: Component> ComponentSet for T {
     const COMPONENT_COUNT: usize = <(T,) as ComponentSet>::COMPONENT_COUNT;
 
     unsafe fn write_archetype(self, archetype: &mut Archetype) {
-        (self,).write_archetype(archetype);
+        unsafe { (self,).write_archetype(archetype) };
     }
 
     fn component_infos() -> impl AsRef<[TypeInfo]> {
@@ -85,7 +85,7 @@ macro_rules! impl_tuple_component_set {
                 let ( $( $t, )+ ) = self;
 
                 $(
-                    archetype.write_to_end($t);
+                    unsafe { archetype.write_to_end($t) };
                 )+
             }
 

@@ -31,7 +31,7 @@ impl std::cmp::Ord for TypeInfo {
 impl TypeInfo {
     pub fn of<T: 'static>() -> Self {
         unsafe fn drop<T>(ptr: *mut u8) {
-            ptr.cast::<T>().drop_in_place();
+            unsafe { ptr.cast::<T>().drop_in_place() };
         }
 
         Self {
@@ -63,14 +63,6 @@ impl Archetype {
             .binary_search(&TypeInfo::of::<C>())
             .is_ok()
     }
-
-    // pub fn contains_all(&self, components: impl IntoIterator<Item = TypeId>) -> bool {
-    //     components.into_iter().all(|c| {
-    //         self.component_types
-    //             .binary_search_by_key(&c, |info| info.id)
-    //             .is_ok()
-    //     })
-    // }
 
     pub(crate) fn alloc(&mut self, cap: usize) {
         use std::alloc::{alloc, handle_alloc_error};
